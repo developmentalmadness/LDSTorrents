@@ -1,72 +1,72 @@
 ﻿using Fizzler.Systems.HtmlAgilityPack;
 using HtmlAgilityPack;
-using MonoTorrent.Common;
-using Newtonsoft.Json;
+using log4net;
+using Massive;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections.Generic;
+using System.Configuration;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web;
-using Massive;
-using System.Collections.Generic;
-using System.Dynamic;
-using System.IO.Compression;
-using System.Text.RegularExpressions;
 
-namespace LDSTorrents
+namespace Web.Code
 {
-    class Program
+    public class Crawler
     {
+        private static readonly ILog logger = LogManager.GetLogger(typeof(Crawler));
+
         static dynamic Torrents = new DynamicModel("LDSTorrents", tableName: "Torrents", primaryKeyField: "TorrentID");
+        static int Running = 0;
+        static string downloadDir;
 
-        static void Main(string[] args)
+        public static void ScrapeChannels(object args)
         {
-            //ScrapeChannel();
-            //ScrapeCategories();
-            ScrapeChannels();
-        }
+            if (Interlocked.CompareExchange(ref Running, 1, 0) != 0)
+                return;
 
-        private static void ScrapeChannels()
-        {
-            var table = new DynamicModel("LDSTorrents", tableName: "Channels", primaryKeyField: "ChannelID");
-
-            var channels = table.All();
-            foreach (var channel in channels)
+            try
             {
-                Console.WriteLine("Scraping '{0}'...", channel.Title);
-                var videos = ScrapeChannel(channel);
-                Torrents.Save(videos.ToArray());
-                table.Update(new { LastUpdated = DateTime.Now }, channel.ChannelID);
-                break;
-            }
-        }
+                string dir = ConfigurationManager.AppSettings["torrentsdir"];
+                if (!String.IsNullOrEmpty(dir))
+                {
+                    if (Path.IsPathRooted(dir) == false && HttpContext.Current != null)
+                        dir = HttpContext.Current.Server.MapPath(dir);
 
-        private static void ScrapeCategories()
-        {
-            string url = "http://www.mormonchannel.org/";
-            var request = WebRequest.CreateHttp(url);
+                    if (Directory.Exists(dir))
+                        downloadDir = dir;
+                    else
+                        downloadDir = Environment.CurrentDirectory;
+                }
 
-            HtmlDocument html = new HtmlDocument();
-            using (var input = request.GetResponse())
-                html.Load(input.GetResponseStream(), true);
+                var table = new DynamicModel("LDSTorrents", tableName: "Channels", primaryKeyField: "ChannelID");
 
-            var doc = html.DocumentNode;
-
-            var categories = doc.QuerySelectorAll(".ribbon");
-            foreach (var item in categories)
-            {
-                var category = item.QuerySelector(".ribbon-title").InnerText;
-                category = category.Substring(0, category.IndexOf("&#160;")).TrimEnd();
-
-                var channels = item.QuerySelectorAll(".teaser_title");
+                var channels = table.All();
                 foreach (var channel in channels)
                 {
-                    var name = channel.InnerText;
-                    var location = channel.GetAttributeValue("href", String.Empty);
-                    Console.WriteLine("('{0}','mormonchannel.org','{1}','{2}'),", name, location, category);
+                    try
+                    {
+                        logger.InfoFormat("Scraping '{0}'...", channel.Title);
+                        var videos = ScrapeChannel(channel);
+                        Torrents.Save(videos.ToArray());
+                        table.Update(new { LastUpdated = DateTime.Now }, channel.ChannelID);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(String.Format("Failed to scrape channel '{0}' with the following exception: ", channel.Title), ex);
+                    }
+                    break;
                 }
             }
+            catch (Exception ex)
+            {
+                logger.Error("ScrapeChannels failed with the following exception: ", ex);
+            }
+
+            Interlocked.Exchange(ref Running, 0);
         }
 
         private static IEnumerable<dynamic> ScrapeChannel(dynamic channel)
@@ -95,8 +95,8 @@ namespace LDSTorrents
                         if (exists != null)
                             continue;
 
-                        Console.WriteLine("{0} ==> {1}", title, resource);
-
+                        logger.InfoFormat("{0} ==> {1}", title, resource);
+                        
                         string result = String.Empty;
                         string rh = String.Empty;
                         string torrentUrl = String.Empty;
@@ -119,7 +119,7 @@ namespace LDSTorrents
                                         writer.Write(String.Format("rh={0}", rh));
                                     break;
                                 default:
-                                    Console.WriteLine("Oops! What happened? '{0}'", result);
+                                    logger.InfoFormat("Oops! What happened? '{0}'", result);
                                     break;
                             }
 
@@ -133,30 +133,33 @@ namespace LDSTorrents
                             if ("|success|exists|".IndexOf(result) != -1)
                             {
                                 torrentUrl = String.Format("http://burnbit.com{0}", response.GetValue("redirect").Value<String>().Replace("/torrent/", "/download/"));
-                                Console.WriteLine("Torrent: {0}", torrentUrl);
+                                logger.InfoFormat("Torrent: {0}", torrentUrl);
                                 break;
                             }
                             else if (result == "error")
                             {
                                 //TODO: if error includes "not resumable" I'll need to create the torrent manually: Download the file, create the torrent, upload the torrent (via ftp) to a hosted url, then add it to the feed
                                 var error = response.GetValue("html").Value<String>();
-                                Console.WriteLine("Error: {0}", error);
+                                logger.WarnFormat("burnbit.com/regfile returned and error while trying to burn '{1}' - error: {0}", error, resource);
                                 break;
                             }
 
                             rh = response.GetValue("rh").Value<String>();
-                            Console.WriteLine("Waiting (rh: {0})...", rh);
+                            logger.InfoFormat("Waiting (rh: {0})...", rh);
                             Thread.Sleep(5000);
                         }
 
                         if (torrentUrl.Length == 0)
+                        {
+                            logger.WarnFormat("No torrent available for '{0}'", resource);
                             continue;
+                        }
 
                         var fileSize = 0L;
                         var fileName = String.Format("{0}.torrent", torrentUrl.Substring(torrentUrl.LastIndexOf("/") + 1));
                         string localPath = String.Format("torrents{4}{0}{4}{1}{4}{2}{4}{3}", channel.Host, channel.Category, channel.Title, fileName, Path.DirectorySeparatorChar);
                         localPath = localPath.Replace(' ', '_').Replace(",", String.Empty).Replace("'", String.Empty);
-                        string filePath = Path.Combine(Environment.CurrentDirectory, localPath);
+                        string filePath = Path.Combine(downloadDir, localPath);
 
                         if (!Directory.Exists(filePath))
                         {
@@ -165,7 +168,7 @@ namespace LDSTorrents
                         }
 
                         //download torrent
-                        Console.WriteLine("Downloading torrent file '{0}'", torrentUrl);
+                        logger.InfoFormat("Downloading torrent file '{0}'", torrentUrl);
                         var getTorrent = WebRequest.CreateHttp(torrentUrl);
                         getTorrent.Method = "GET";
                         getTorrent.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip");
@@ -190,8 +193,13 @@ namespace LDSTorrents
                                                     Int32.Parse(pubDateRegex.Groups["month"].Value),
                                                     Int32.Parse(pubDateRegex.Groups["day"].Value));
                         }
+                        else
+                        {
+                            logger.WarnFormat("Unable to parse date from the following url: {0}", fileName);
+                        }
 
-                        list.Add(new { 
+                        list.Add(new
+                        {
                             ChannelID = channel.ChannelID,
                             Title = title,
                             DatePublished = pubDate,
@@ -203,7 +211,7 @@ namespace LDSTorrents
                     }
                 }
 
-                if(list.Count != 0)
+                if (list.Count != 0)
                     break;
             }
 

@@ -18,6 +18,7 @@ namespace Web.Code
     {
         private readonly string atom = "application/atom+xml";
         private readonly string rss = "application/rss+xml";
+        string medians = "http://search.yahoo.com/mrss/";
 
         public SyndicationFeedFormatter()
         {
@@ -54,6 +55,8 @@ namespace Web.Code
 
         private void BuildSyndicationFeed(Feed model, Stream stream, string contenttype)
         {
+            XmlQualifiedName n = new XmlQualifiedName("media", "http://www.w3.org/2000/xmlns/");
+
             List<SyndicationItem> items = new List<SyndicationItem>();
             var feed = new SyndicationFeed()
             {
@@ -62,6 +65,7 @@ namespace Web.Code
             feed.Links.Add(new SyndicationLink(new Uri(model.Url)));
             feed.Authors.Add(new SyndicationPerson { Name = model.Host, Uri = String.Format("http://{0}", model.Host) });
             feed.Categories.Add(new SyndicationCategory { Name = model.Category });
+            feed.AttributeExtensions.Add(n, medians);
 
             var enumerator = model.Items.GetEnumerator();
             while (enumerator.MoveNext())
@@ -93,11 +97,17 @@ namespace Web.Code
                 Title = new TextSyndicationContent(u.Title),
                 BaseUri = new Uri(u.Address),
                 Id = u.Address,
-                LastUpdatedTime = u.CreatedAt,
+                PublishDate = u.CreatedAt,
+                LastUpdatedTime = u.UpdatedAt,
                 Content = new TextSyndicationContent(u.Description)
             };
             item.Authors.Add(new SyndicationPerson() { Name = u.CreatedBy });
-            item.Links.Add(SyndicationLink.CreateMediaEnclosureLink(item.BaseUri, "application/x-bittorrent", u.FileSize));
+            item.ElementExtensions.Add("author", String.Empty, u.CreatedBy);
+            if (item.BaseUri.Host.EndsWith("burnbit.com", StringComparison.OrdinalIgnoreCase))
+            {
+                item.Links.Add(SyndicationLink.CreateMediaEnclosureLink(item.BaseUri, "application/x-bittorrent", u.FileSize));
+                item.ElementExtensions.Add("link", String.Empty, u.Address);
+            }
             return item;
         }
     }

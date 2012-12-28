@@ -15,5 +15,6 @@ namespace Web.Models
         public string CreatedBy { get; set; }
 
         public int FileSize { get; set; }
+        public DateTime UpdatedAt { get; set; }
     }
 }
