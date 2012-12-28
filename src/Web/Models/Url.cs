@@ -16,5 +16,6 @@ namespace Web.Models
 
         public int FileSize { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public string TransmissionPath { get; set; }
     }
 }

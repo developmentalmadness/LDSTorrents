@@ -73,7 +73,9 @@ namespace Web.Controllers
                     CreatedBy = feed.Host,
                     CreatedAt = item.DatePublished,
                     UpdatedAt = item.DatePublished,
-                    FileSize = item.FileByteLength
+                    FileSize = item.FileByteLength,
+                    TransmissionPath = String.Format("{0}/{1}/{2}/{3}", feed.Host, feed.Category, feed.Title, item.Title)
+                        .Replace(' ', '_').Replace(",", String.Empty).Replace("'", String.Empty)
                 });
             }
 

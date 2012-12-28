@@ -22,8 +22,8 @@ namespace Web.Code
 
         public SyndicationFeedFormatter()
         {
-            SupportedMediaTypes.Add(new MediaTypeHeaderValue(atom));
             SupportedMediaTypes.Add(new MediaTypeHeaderValue(rss));
+            SupportedMediaTypes.Add(new MediaTypeHeaderValue(atom));
         }
 
         Func<Type, bool> SupportedType = (type) =>
@@ -107,6 +107,7 @@ namespace Web.Code
             {
                 item.Links.Add(SyndicationLink.CreateMediaEnclosureLink(item.BaseUri, "application/x-bittorrent", u.FileSize));
                 item.ElementExtensions.Add("link", String.Empty, u.Address);
+                item.ElementExtensions.Add("transmission-path", String.Empty, u.TransmissionPath);
             }
             return item;
         }
