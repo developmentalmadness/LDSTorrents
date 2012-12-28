@@ -12,6 +12,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web;
+using Elmah;
 
 namespace Web.Code
 {
@@ -30,16 +31,20 @@ namespace Web.Code
 
             try
             {
-                string dir = ConfigurationManager.AppSettings["torrentsdir"];
-                if (!String.IsNullOrEmpty(dir))
+                if (String.IsNullOrEmpty(downloadDir))
                 {
-                    if (Path.IsPathRooted(dir) == false && HttpContext.Current != null)
-                        dir = HttpContext.Current.Server.MapPath(dir);
+                    string dir = ConfigurationManager.AppSettings["torrentsdir"];
+                    if (!String.IsNullOrEmpty(dir))
+                    {
+                        var context = args as HttpContextBase;
+                        if (Path.IsPathRooted(dir) == false && context != null)
+                            dir = context.Server.MapPath(dir);
 
-                    if (Directory.Exists(dir))
-                        downloadDir = dir;
-                    else
-                        downloadDir = Environment.CurrentDirectory;
+                        if (Directory.Exists(dir))
+                            downloadDir = dir;
+                        else
+                            downloadDir = Environment.CurrentDirectory;
+                    }
                 }
 
                 var table = new DynamicModel("LDSTorrents", tableName: "Channels", primaryKeyField: "ChannelID");
@@ -57,6 +62,7 @@ namespace Web.Code
                     catch (Exception ex)
                     {
                         logger.Error(String.Format("Failed to scrape channel '{0}' with the following exception: ", channel.Title), ex);
+                        ErrorLog.GetDefault(null).Log(new Error(ex));
                     }
                     break;
                 }
@@ -64,6 +70,7 @@ namespace Web.Code
             catch (Exception ex)
             {
                 logger.Error("ScrapeChannels failed with the following exception: ", ex);
+                ErrorLog.GetDefault(null).Log(new Error(ex));
             }
 
             Interlocked.Exchange(ref Running, 0);

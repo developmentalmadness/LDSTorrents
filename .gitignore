@@ -13,3 +13,5 @@ _dotCover.*
 *.cache
 ~$*
 [Pp]ublish
+App_Data
+torrents

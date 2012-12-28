@@ -1,4 +1,5 @@
-﻿using System;
+﻿using log4net;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -16,10 +17,14 @@ namespace Web
 
     public class WebApiApplication : System.Web.HttpApplication
     {
+        private static readonly ILog logger = LogManager.GetLogger(typeof(WebApiApplication));
         Timer crawlMediaSources;
 
         protected void Application_Start()
         {
+            log4net.Config.XmlConfigurator.Configure();
+            logger.Info("LDSTorrents.Web is starting...");
+
             AreaRegistration.RegisterAllAreas();
 
             WebApiConfig.Register(GlobalConfiguration.Configuration);
@@ -27,13 +32,20 @@ namespace Web
             RouteConfig.RegisterRoutes(RouteTable.Routes);
             BundleConfig.RegisterBundles(BundleTable.Bundles);
 
+            logger.Info("Starting crawler...");
             var daily = Convert.ToInt32(TimeSpan.FromDays(1).TotalMilliseconds);
-            crawlMediaSources = new Timer(new TimerCallback(Crawler.ScrapeChannels), null, 0, daily);
+            crawlMediaSources = new Timer(
+                new TimerCallback(Crawler.ScrapeChannels), 
+                new HttpContextWrapper(HttpContext.Current), 
+                0, 
+                daily
+            );
             
         }
 
         protected void Application_End()
         {
+            logger.Info("LDSTorrents.Web is shutting down...");
             crawlMediaSources.Dispose();
         }
     }
