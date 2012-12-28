@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Net.Http.Formatting;
 using System.Net.Http.Headers;
 using System.ServiceModel.Syndication;
@@ -25,7 +27,7 @@ namespace Web.Code
 
         Func<Type, bool> SupportedType = (type) =>
         {
-            if (type == typeof(Url) || type == typeof(IEnumerable<Url>))
+            if (type == typeof(Feed))
                 return true;
             else
                 return false;
@@ -41,34 +43,30 @@ namespace Web.Code
             return SupportedType(type);
         }
 
-        public override Task WriteToStreamAsync(Type type, object value, Stream writeStream, System.Net.Http.HttpContent content, System.Net.TransportContext transportContext)
+        public override Task WriteToStreamAsync(Type type, object value, Stream writeStream, HttpContent content, TransportContext transportContext)
         {
             return Task.Factory.StartNew(() =>
             {
-                if (type == typeof(Url) || type == typeof(IEnumerable<Url>))
-                    BuildSyndicationFeed(value, writeStream, content.Headers.ContentType.MediaType);
+                if (type == typeof(Feed))
+                    BuildSyndicationFeed((Feed)value, writeStream, content.Headers.ContentType.MediaType);
             });
         }
 
-        private void BuildSyndicationFeed(object models, Stream stream, string contenttype)
+        private void BuildSyndicationFeed(Feed model, Stream stream, string contenttype)
         {
             List<SyndicationItem> items = new List<SyndicationItem>();
             var feed = new SyndicationFeed()
             {
-                Title = new TextSyndicationContent("My Feed")
+                Title = new TextSyndicationContent(model.Title),
             };
+            feed.Links.Add(new SyndicationLink(new Uri(model.Url)));
+            feed.Authors.Add(new SyndicationPerson { Name = model.Host, Uri = String.Format("http://{0}", model.Host) });
+            feed.Categories.Add(new SyndicationCategory { Name = model.Category });
 
-            if (models is IEnumerable<Url>)
+            var enumerator = model.Items.GetEnumerator();
+            while (enumerator.MoveNext())
             {
-                var enumerator = ((IEnumerable<Url>)models).GetEnumerator();
-                while (enumerator.MoveNext())
-                {
-                    items.Add(BuildSyndicationItem(enumerator.Current));
-                }
-            }
-            else
-            {
-                items.Add(BuildSyndicationItem((Url)models));
+                items.Add(BuildSyndicationItem(enumerator.Current));
             }
 
             feed.Items = items;
@@ -94,10 +92,12 @@ namespace Web.Code
             {
                 Title = new TextSyndicationContent(u.Title),
                 BaseUri = new Uri(u.Address),
+                Id = u.Address,
                 LastUpdatedTime = u.CreatedAt,
                 Content = new TextSyndicationContent(u.Description)
             };
             item.Authors.Add(new SyndicationPerson() { Name = u.CreatedBy });
+            item.Links.Add(SyndicationLink.CreateMediaEnclosureLink(item.BaseUri, "application/x-bittorrent", u.FileSize));
             return item;
         }
     }

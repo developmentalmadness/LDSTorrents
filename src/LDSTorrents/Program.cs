@@ -12,6 +12,7 @@ using Massive;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.IO.Compression;
+using System.Text.RegularExpressions;
 
 namespace LDSTorrents
 {
@@ -150,6 +151,7 @@ namespace LDSTorrents
                         if (torrentUrl.Length == 0)
                             continue;
 
+                        var fileSize = 0L;
                         var fileName = String.Format("{0}.torrent", torrentUrl.Substring(torrentUrl.LastIndexOf("/") + 1));
                         string localPath = String.Format("torrents{4}{0}{4}{1}{4}{2}{4}{3}", channel.Host, channel.Category, channel.Title, fileName, Path.DirectorySeparatorChar);
                         localPath = localPath.Replace(' ', '_').Replace(",", String.Empty).Replace("'", String.Empty);
@@ -169,22 +171,33 @@ namespace LDSTorrents
 
                         using (var downloadTorrent = new GZipStream(getTorrent.GetResponse().GetResponseStream(), CompressionMode.Decompress))
                         {
-                            
                             using (var torrentFile = new FileStream(filePath, FileMode.Create, FileAccess.Write))
                             {
                                 byte[] torrentBuffer = new byte[4096];
                                 int bytesRead = -1;
                                 while (0 < (bytesRead = downloadTorrent.Read(torrentBuffer, 0, torrentBuffer.Length)))
                                     torrentFile.Write(torrentBuffer, 0, bytesRead);
+                                fileSize = torrentFile.Length;
                             }
+                        }
+
+                        var pubDate = DateTime.Today;
+                        var pubDateRegex = Regex.Match(fileName, @"(?<year>\d{4})_(?<month>\d{2})_(?<day>\d{3})");
+                        if (pubDateRegex.Success)
+                        {
+                            pubDate = new DateTime(Int32.Parse(pubDateRegex.Groups["year"].Value),
+                                                    Int32.Parse(pubDateRegex.Groups["month"].Value),
+                                                    Int32.Parse(pubDateRegex.Groups["day"].Value));
                         }
 
                         list.Add(new { 
                             ChannelID = channel.ChannelID,
                             Title = title,
+                            DatePublished = pubDate,
                             TorrentUri = torrentUrl,
                             ResourceUri = resource,
-                            LocalPath = String.Format("{0}{1}", Path.DirectorySeparatorChar, localPath)
+                            LocalPath = String.Format("{0}{1}", Path.DirectorySeparatorChar, localPath),
+                            FileByteLength = fileSize
                         });
                     }
                 }
