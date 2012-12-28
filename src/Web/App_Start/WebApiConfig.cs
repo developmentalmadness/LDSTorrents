@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+//using System.Linq;
 using System.Web.Http;
 using Web.Code;
 
@@ -10,7 +10,7 @@ namespace Web
     {
         public static void Register(HttpConfiguration config)
         {
-            GlobalConfiguration.Configuration.Formatters.Add(new SyndicationFeedFormatter());
+            GlobalConfiguration.Configuration.Formatters.Insert(0, new SyndicationFeedFormatter());
 
             config.Routes.MapHttpRoute(
                 name: "DefaultApi",
