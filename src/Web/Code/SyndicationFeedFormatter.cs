@@ -107,7 +107,7 @@ namespace Web.Code
             {
                 item.Links.Add(SyndicationLink.CreateMediaEnclosureLink(item.BaseUri, "application/x-bittorrent", u.FileSize));
                 item.ElementExtensions.Add("link", String.Empty, u.Address);
-                item.ElementExtensions.Add("transmission-path", String.Empty, u.TransmissionPath);
+                item.Summary = new TextSyndicationContent(u.TransmissionPath, TextSyndicationContentKind.Plaintext);
             }
             return item;
         }
