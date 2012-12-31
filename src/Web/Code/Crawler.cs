@@ -200,9 +200,11 @@ namespace Web.Code
                             var pubDateRegex = Regex.Match(fileName, @"(?<year>\d{4})_(?<month>\d{2})_(?<day>\d{3})");
                             if (pubDateRegex.Success)
                             {
+                                int day = 1;
+                                Int32.TryParse(pubDateRegex.Groups["day"].Value, out day);
                                 pubDate = new DateTime(Int32.Parse(pubDateRegex.Groups["year"].Value),
                                                         Int32.Parse(pubDateRegex.Groups["month"].Value),
-                                                        Int32.Parse(pubDateRegex.Groups["day"].Value));
+                                                        day);
                             }
                         }
                         catch (Exception ex)
