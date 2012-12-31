@@ -215,6 +215,7 @@ namespace Web.Code
                         logger.InfoFormat("Adding '{0}' ({1} bytes)...", title, fileSize);
                         list.Add(new
                         {
+                            TorrentID = exists != null ? exists.TorrentID : 0,
                             ChannelID = channel.ChannelID,
                             Title = title,
                             DatePublished = pubDate,
