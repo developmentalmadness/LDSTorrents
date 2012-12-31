@@ -65,6 +65,9 @@ namespace Web.Controllers
             var items = new List<Url>();
             foreach (var item in torrents)
             {
+                if (item.FileByteLength == 0)
+                    continue;
+
                 items.Add(new Url
                 {
                     UrlId = item.TorrentID,

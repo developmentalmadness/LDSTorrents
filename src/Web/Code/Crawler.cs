@@ -64,7 +64,9 @@ namespace Web.Code
                         logger.Error(String.Format("Failed to scrape channel '{0}' with the following exception: ", channel.Title), ex);
                         ErrorLog.GetDefault(null).Log(new Error(ex));
                     }
+#if DEBUG
                     break;
+#endif
                 }
             }
             catch (Exception ex)
@@ -80,7 +82,7 @@ namespace Web.Code
         {
             var list = new List<dynamic>();
 
-            var request = WebRequest.CreateHttp(channel.Url);
+            var request = WebRequest.Create(channel.Url);
 
             HtmlDocument html = new HtmlDocument();
             using (var input = request.GetResponse())
@@ -99,7 +101,7 @@ namespace Web.Code
                         var title = HttpUtility.HtmlDecode(video.QuerySelector("a.teaser_title").InnerText);
                         var resource = item.GetAttributeValue("href", String.Empty);
                         var exists = Torrents.First(ResourceUri: resource);
-                        if (exists != null)
+                        if (exists != null && exists.FileByteLength != 0)
                             continue;
 
                         logger.InfoFormat("{0} ==> {1}", title, resource);
@@ -110,7 +112,7 @@ namespace Web.Code
 
                         while (true)
                         {
-                            var torrentRequest = WebRequest.CreateHttp("http://burnbit.com/regfile");
+                            var torrentRequest = (HttpWebRequest) WebRequest.Create("http://burnbit.com/regfile");
                             torrentRequest.Method = "POST";
                             torrentRequest.ContentType = "application/x-www-form-urlencoded";
                             torrentRequest.Accept = "application/json; charset=utf-8";
@@ -176,7 +178,7 @@ namespace Web.Code
 
                         //download torrent
                         logger.InfoFormat("Downloading torrent file '{0}'", torrentUrl);
-                        var getTorrent = WebRequest.CreateHttp(torrentUrl);
+                        var getTorrent = WebRequest.Create(torrentUrl);
                         getTorrent.Method = "GET";
                         getTorrent.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip");
 
@@ -193,18 +195,22 @@ namespace Web.Code
                         }
 
                         var pubDate = DateTime.Today;
-                        var pubDateRegex = Regex.Match(fileName, @"(?<year>\d{4})_(?<month>\d{2})_(?<day>\d{3})");
-                        if (pubDateRegex.Success)
+                        try
                         {
-                            pubDate = new DateTime(Int32.Parse(pubDateRegex.Groups["year"].Value),
-                                                    Int32.Parse(pubDateRegex.Groups["month"].Value),
-                                                    Int32.Parse(pubDateRegex.Groups["day"].Value));
+                            var pubDateRegex = Regex.Match(fileName, @"(?<year>\d{4})_(?<month>\d{2})_(?<day>\d{3})");
+                            if (pubDateRegex.Success)
+                            {
+                                pubDate = new DateTime(Int32.Parse(pubDateRegex.Groups["year"].Value),
+                                                        Int32.Parse(pubDateRegex.Groups["month"].Value),
+                                                        Int32.Parse(pubDateRegex.Groups["day"].Value));
+                            }
                         }
-                        else
+                        catch (Exception ex)
                         {
                             logger.WarnFormat("Unable to parse date from the following url: {0}", fileName);
                         }
 
+                        logger.InfoFormat("Adding '{0}' ({1} bytes)...", title, fileSize);
                         list.Add(new
                         {
                             ChannelID = channel.ChannelID,
@@ -217,9 +223,10 @@ namespace Web.Code
                         });
                     }
                 }
-
+#if DEBUG
                 if (list.Count != 0)
                     break;
+#endif
             }
 
             return list;
